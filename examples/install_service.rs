@@ -1,6 +1,6 @@
 #[cfg(windows)]
 fn main() -> windows_service::Result<()> {
-    use std::{ffi::OsString, path::Path};
+    use std::ffi::OsString;
     use windows_service::{
         service::{ServiceAccess, ServiceErrorControl, ServiceInfo, ServiceStartType, ServiceType},
         service_manager::{ServiceManager, ServiceManagerAccess},
@@ -12,7 +12,9 @@ fn main() -> windows_service::Result<()> {
     // This example installs the service defined in `examples/ping_service.rs`.
     // In the real world code you would set the executable path to point to your own binary
     // that implements windows service.
-    let service_binary_path = std::env::current_dir().unwrap().join(r"target\release\grpc-service.exe");
+    let service_binary_path = std::env::current_dir()
+        .unwrap()
+        .join(r"target\release\grpc-service.exe");
 
     let service_info = ServiceInfo {
         name: OsString::from("grpc-service-rs"),

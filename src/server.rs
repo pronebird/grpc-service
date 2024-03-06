@@ -1,9 +1,9 @@
 use std::net::SocketAddr;
 
-use tonic::{transport::Server, Request, Response, Status};
-use std::future::Future;
 use hello_world::greeter_server::{Greeter, GreeterServer};
 use hello_world::{HelloReply, HelloRequest};
+use std::future::Future;
+use tonic::{transport::Server, Request, Response, Status};
 
 pub mod hello_world {
     tonic::include_proto!("helloworld");
