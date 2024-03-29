@@ -74,6 +74,18 @@ fn run_service(arguments: &[OsString]) -> Result<(), Error> {
 
     tracing::debug!("gRPC server has shutdown");
 
+    // Tell the system that service has stopped.
+    status_handle.set_service_status(ServiceStatus {
+        service_type: SERVICE_TYPE,
+        current_state: ServiceState::Stopped,
+        controls_accepted: ServiceControlAccept::empty(),
+        exit_code: ServiceExitCode::Win32(0),
+        checkpoint: 0,
+        wait_hint: Duration::default(),
+        process_id: None,
+    })?;
+
+
     Ok(())
 }
 
