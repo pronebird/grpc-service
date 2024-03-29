@@ -1,6 +1,5 @@
 use std::{ffi::OsString, net::SocketAddr, str::FromStr, time::Duration};
 
-use futures_util::FutureExt;
 use windows_service::{
     define_windows_service,
     service::{
@@ -12,6 +11,7 @@ use windows_service::{
 };
 mod server;
 
+mod channel;
 mod service;
 
 const SERVICE_NAME: &str = "asset-service-rs";
@@ -31,10 +31,8 @@ fn run_service(arguments: &[OsString]) -> Result<(), Error> {
     let address = SocketAddr::from_str("[::1]:10000").unwrap();
     let rt = tokio::runtime::Runtime::new().unwrap();
 
-    let (grpc_shutdown_tx, mut grpc_shutdown_rx) = tokio::sync::mpsc::unbounded_channel();
-    let grpc_shutdown_signal = async move {
-        grpc_shutdown_rx.recv().map(|_opt| ()).await
-    };
+    let (grpc_shutdown_tx, grpc_shutdown_rx) = channel::channel();
+    let grpc_shutdown_signal = async move { grpc_shutdown_rx.recv().await };
 
     let grpc_task_handle = rt.spawn(service::run(address, grpc_shutdown_signal));
 
@@ -46,7 +44,7 @@ fn run_service(arguments: &[OsString]) -> Result<(), Error> {
                 tracing::debug!("received stop request");
                 // send shutdown command to gRPC server
                 tracing::debug!("sending gRPC shutdown command");
-                grpc_shutdown_tx.send(()).unwrap();
+                rt.block_on(grpc_shutdown_tx.send());
                 tracing::debug!("gRPC shutdown command sent");
 
                 ServiceControlHandlerResult::NoError
@@ -69,7 +67,10 @@ fn run_service(arguments: &[OsString]) -> Result<(), Error> {
     })?;
     tracing::info!("service status is 'running'");
 
-    rt.block_on(grpc_task_handle).unwrap();
+    tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(grpc_task_handle)
+        .unwrap();
 
     tracing::debug!("gRPC server has shutdown");
 
