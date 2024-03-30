@@ -93,6 +93,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let file_appender = tracing_appender::rolling::hourly(LOG_DIRECTORY, "grpc-service.log");
     let subscriber = tracing_subscriber::fmt()
         .with_writer(file_appender)
+        .with_max_level(tracing::Level::DEBUG)
         .finish();
 
     // Set the subscriber globally for the application
