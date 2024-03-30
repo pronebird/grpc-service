@@ -50,19 +50,21 @@ impl ServiceEvent {
 }
 
 fn service_main(arguments: Vec<OsString>) {
-    if let Err(e) = run_service(&arguments) {
-        tracing::error!("error: {}", e);
-    }
+    let rt = tokio::runtime::Runtime::new().unwrap();
+
+    rt.block_on(async {
+        if let Err(e) = run_service(&arguments).await {
+            tracing::error!("error: {}", e);
+        }
+    });
 }
 
 #[tracing::instrument(err)]
-fn run_service(arguments: &[OsString]) -> Result<(), Error> {
-    let rt = tokio::runtime::Runtime::new().unwrap();
-
+async fn run_service(arguments: &[OsString]) -> Result<(), Error> {
     let (event_tx, mut event_rx) = mpsc::unbounded_channel();
 
     let event_handler = move |control: ServiceControl| {
-        tracing::debug!("received a control command: {:?}", control);
+        tracing::debug!("Received a control command: {:?}", control);
 
         let (completion_tx, completion_rx) = oneshot::channel();
 
@@ -94,34 +96,32 @@ fn run_service(arguments: &[OsString]) -> Result<(), Error> {
     })?;
     tracing::info!("service status is 'running'");
 
-    rt.block_on(async {
-        let shutdown_token = CancellationToken::new();
-        let shutdown_fut = shutdown_token.clone().cancelled_owned();
+    let shutdown_token = CancellationToken::new();
+    let shutdown_fut = shutdown_token.clone().cancelled_owned();
 
-        let address = SocketAddr::from_str("[::1]:10000").unwrap();
-        let mut service_join_handle = Some(tokio::spawn(service::run(address, shutdown_fut)));
+    let address = SocketAddr::from_str("[::1]:10000").unwrap();
+    let mut service_join_handle = Some(tokio::spawn(service::run(address, shutdown_fut)));
 
-        while let Some(service_event) = event_rx.recv().await {
-            let service_control_result: ServiceControlHandlerResult =
-                match service_event.service_control() {
-                    ServiceControl::Interrogate => ServiceControlHandlerResult::NoError,
-                    ServiceControl::Stop => {
-                        shutdown_token.cancel();
+    while let Some(service_event) = event_rx.recv().await {
+        let service_control_result: ServiceControlHandlerResult =
+            match service_event.service_control() {
+                ServiceControl::Interrogate => ServiceControlHandlerResult::NoError,
+                ServiceControl::Stop => {
+                    shutdown_token.cancel();
 
-                        if let Some(service_join_handle) = service_join_handle.take() {
-                            if let Err(e) = service_join_handle.await {
-                                tracing::error!("Couldn't join on service: {}", e);
-                            }
+                    if let Some(service_join_handle) = service_join_handle.take() {
+                        if let Err(e) = service_join_handle.await {
+                            tracing::error!("Couldn't join on service: {}", e);
                         }
-
-                        ServiceControlHandlerResult::NoError
                     }
-                    _ => ServiceControlHandlerResult::NotImplemented,
-                };
 
-            service_event.complete(service_control_result);
-        }
-    });
+                    ServiceControlHandlerResult::NoError
+                }
+                _ => ServiceControlHandlerResult::NotImplemented,
+            };
+
+        service_event.complete(service_control_result);
+    }
 
     tracing::debug!("gRPC server has shutdown");
 
