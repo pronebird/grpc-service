@@ -308,6 +308,7 @@ dependencies = [
  "prost",
  "thiserror",
  "tokio",
+ "tokio-util",
  "tonic",
  "tonic-build",
  "tracing",
